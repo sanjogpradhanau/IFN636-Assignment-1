@@ -1,24 +1,17 @@
-
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
 
-const protect = async (req, res, next) => {
-    let token;
+// default export: Express middleware that verifies JWT and sets req.user
+module.exports = function auth(req, res, next) {
+  const hdr = req.headers.authorization || '';
+  const [scheme, token] = hdr.split(' ');
+  if (!token || !/^Bearer$/i.test(scheme)) return res.status(401).json({ message: 'No token' });
 
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-        try {
-            token = req.headers.authorization.split(' ')[1];
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            req.user = await User.findById(decoded.id).select('-password');
-            next();
-        } catch (error) {
-            res.status(401).json({ message: 'Not authorized, token failed' });
-        }
-    }
-
-    if (!token) {
-        res.status(401).json({ message: 'Not authorized, no token' });
-    }
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = { id: decoded.id || decoded._id || decoded.userId || decoded.sub };
+    if (!req.user.id) return res.status(401).json({ message: 'Invalid token payload' });
+    return next();
+  } catch (err) {
+    return res.status(401).json({ message: 'Invalid/expired token' });
+  }
 };
-
-module.exports = { protect };
